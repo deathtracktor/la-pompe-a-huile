@@ -51,14 +51,14 @@ def get_session_cookies():
     print('Fetching session cookies...')
     try:
         driver.get(HOME_URL)
-        for c in driver.get_cookies():
-            yield create_cookie(
-                domain=c['domain'],
-                name=c['name'],
-                value=c['value'],
-            )
+        cookies = driver.get_cookies()
     finally:
         driver.close()
+    return [
+        create_cookie(domain=c['domain'], name=c['name'], value=c['value'])
+        for c in cookies
+    ]
+
 
 @contextmanager
 def DisclosureClient():
