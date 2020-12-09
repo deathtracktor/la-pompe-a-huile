@@ -3,10 +3,10 @@ from datetime import date, timedelta
 from functools import partial
 import json
 from itertools import count
-from urllib.parse import urlparse, parse_qs
 from hashlib import sha1
 import time
 
+import click
 from bs4 import BeautifulSoup
 import requests
 from requests.cookies import create_cookie
@@ -34,10 +34,10 @@ POST_ARGS_TEMPL = {
     'textfieldCompany': '',
 }
 
-def make_payload(page):
+def make_payload(page, days):
     """Format the POST request payload."""
     today = date.today()
-    start_date = today - timedelta(days=30)
+    start_date = today - timedelta(days=days)
     extra = {
         'lastPageNumber': page,
         'dateStart': start_date.strftime('%d.%m.%Y'),
@@ -84,11 +84,10 @@ def parse_page(html):
         ts = cols[0].text
         anchors = cols[1].findAll('a')
         org, title = anchors[0].text, anchors[1].text
-        addr = urlparse(anchors[0].attrs['href'])
-        item_id = parse_qs(addr.query)['id'][0]
+        url = anchors[1].attrs['href']
         yield {
-            'id': item_id,
             'ts': ts,
+            'url': url,
             'org': org,
             'title': title,
         }
@@ -97,13 +96,25 @@ def deduplicate(items):
     """Remove duplicated items."""
     return dict(zip(map(make_hash, items), items)).values()
 
-def scrap_site():
+
+def add_summary(items):
+    """Fetch the item's summary page HTML."""
+    for item in items:
+        print('Fetching page "{url}"...'.format(**item))
+        resp = requests.get(item['url'])
+        assert resp.status_code == 200
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        summary = soup.find('div', {'id': 'cont_wrap'}).text
+        yield {**item, 'summary': summary}
+
+
+def scrap_site(days):
     """Load paginated results, extract relevant information."""
     with DisclosureClient() as client:
         for page in count(start=1):
-            resp = client.post(data=make_payload(page))
+            resp = client.post(data=make_payload(page, days))
             assert resp.status_code == 200
-            items = deduplicate(parse_page(resp.text))
+            items = list(add_summary(deduplicate(parse_page(resp.text))))
             if not items:
                 break
             yield from items
@@ -122,12 +133,29 @@ def cache_object(obj):
         cache[key] = obj
         cache.commit()
 
-def run_main():
-    """Run the application."""
-    for n, item in enumerate(scrap_site()):
+
+@click.group()
+def cli():
+    """CLI command group."""
+    pass
+
+
+@cli.command(name='fetch')
+@click.option('-d', '--days', type=int, default=1,
+              help='Fetch event posted in the last N days')
+def fetch_new_events(days):
+    """Fetch and cache events posted during the last N days."""
+    for n, item in enumerate(scrap_site(days)):
         if cache_object(item):
             print('Cached {} new records.'.format(n))
             break
 
+
+@cli.command(name='report')
+def make_report():
+    """Analyze cached records, make a report."""
+    pass
+
+
 if __name__ == '__main__':
-    run_main()
+    cli()
