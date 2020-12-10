@@ -145,10 +145,11 @@ def cli():
               help='Fetch event posted in the last N days')
 def fetch_new_events(days):
     """Fetch and cache events posted during the last N days."""
+    n = 0
     for n, item in enumerate(scrap_site(days)):
         if cache_object(item):
-            print('Cached {} new records.'.format(n))
             break
+    print('Cached {} new records.'.format(n))
 
 
 @cli.command(name='report')
