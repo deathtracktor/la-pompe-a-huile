@@ -4,6 +4,7 @@ from functools import partial
 import json
 from itertools import count
 from hashlib import sha1
+from operator import itemgetter
 import time
 
 import click
@@ -132,6 +133,13 @@ def cache_object(obj):
             return True
         cache[key] = obj
         cache.commit()
+    return False
+
+
+def match_substring(substr, item):
+    """Return True if the item contains the substring."""
+    text = ' '.join((item['title'], item['summary']))
+    return substr in text
 
 
 @click.group()
@@ -152,10 +160,15 @@ def fetch_new_events(days):
     print('Cached {} new records.'.format(n))
 
 
-@cli.command(name='report')
-def make_report():
-    """Analyze cached records, make a report."""
-    pass
+@cli.command(name='substr')
+@click.argument('substring')
+def match_regex(substring):
+    """Match cached records against a substring."""
+    with SqliteDict('.cache') as cache:
+        items = sorted(cache.values(), key=itemgetter('ts'))
+    print('Records containing "{}":'.format(substring))
+    for m in filter(partial(match_substring, substring), items):
+        print(m['url'], m['title'])
 
 
 if __name__ == '__main__':
