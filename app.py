@@ -136,10 +136,18 @@ def cache_object(obj):
     return False
 
 
-def match_substring(substr, item):
-    """Return True if the item contains the substring."""
-    text = ' '.join((item['title'], item['summary']))
-    return substr in text
+def includes(text, terms):
+    """
+    Return True if the text contains one of the passed terms,
+    or no search terms have been passed.
+    """
+    assert isinstance(terms, tuple)
+    return not terms or any(term.lower() in text.lower() for term in terms)
+
+
+def match_search(item, org, summary):
+    """Match items containing the passed substring(s)."""
+    return includes(item['org'], org) and includes(item['summary'], summary)
 
 
 @click.group()
@@ -160,15 +168,21 @@ def fetch_new_events(days):
     print('Cached {} new records.'.format(n))
 
 
-@cli.command(name='substr')
-@click.argument('substring')
-def match_regex(substring):
-    """Match cached records against a substring."""
+@cli.command(name='report')
+@click.option('--org', '-o', type=str, multiple=True,
+              help='Only articles matching a sub-string in organization names.')
+@click.option('--summary', '-s', type=str, multiple=True,
+              help='Only articles matching a sub-string in summaries.')
+def save_report(org, summary):
+    """
+    Write cached articles to disk files.
+    Optionally restrict to organizations and/or summaries containing
+    ANY of the passed search terms. The search terms are not case-sensitive.
+    """
+    matching = partial(match_search, org=org, summary=summary)
     with SqliteDict('.cache') as cache:
-        items = sorted(cache.values(), key=itemgetter('ts'))
-    print('Records containing "{}":'.format(substring))
-    for m in filter(partial(match_substring, substring), items):
-        print(m['url'], m['title'])
+        for item in filter(matching, cache.values()):
+            print(item)
 
 
 if __name__ == '__main__':
