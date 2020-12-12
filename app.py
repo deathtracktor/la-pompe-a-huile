@@ -1,10 +1,8 @@
 from contextlib import contextmanager
-from datetime import date, timedelta
 from functools import partial
 import json
 from itertools import count
 from hashlib import sha1
-from operator import itemgetter
 from pathlib import Path
 import time
 
@@ -49,8 +47,8 @@ POST_ARGS_TEMPL = {
 
 def make_payload(page, days):
     """Format the POST request payload."""
-    today = date.today()
-    start_date = today - timedelta(days=days)
+    today = dateparser.parse('today')
+    start_date = dateparser.parse('{} days ago'.format(days))
     extra = {
         'lastPageNumber': page,
         'dateStart': start_date.strftime('%d.%m.%Y'),
@@ -179,7 +177,7 @@ def save_article(path, ts, summary, **context):
     timestamp = dateparser.parse(ts).strftime('%Y/%d/%m %T:%M')
     with open(path, 'w', encoding='utf8') as f:
         f.write(REPORT_TEMPL.format(ts=timestamp, summary=text, **context))
-    print('Saved "{}".'.format(path))    
+    print('Saved "{}".'.format(path))
 
 
 @click.group()
