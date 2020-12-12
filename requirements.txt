@@ -1,6 +1,8 @@
 beautifulsoup4==4.9.3
 bs4==0.0.1
 click==7.1.2
+dateparser==1.0.0
+python-slugify==4.0.1
 requests==2.25.0
 selenium==3.141.0
 sqlitedict==1.7.0

@@ -5,18 +5,30 @@ import json
 from itertools import count
 from hashlib import sha1
 from operator import itemgetter
+from pathlib import Path
 import time
 
 import click
 from bs4 import BeautifulSoup
+import dateparser
 import requests
 from requests.cookies import create_cookie
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
+from slugify import slugify
 from sqlitedict import SqliteDict
 
 HOME_URL = 'https://e-disclosure.ru/'
 SEARCH_URL = 'https://e-disclosure.ru/poisk-po-soobshheniyam'
+REPORT_PATH = Path(__file__).parent / 'reports'
+REPORT_TEMPL = '''
+[{ts}] "{org}"
+---
+{title}
+---
+{summary}
+---
+'''
 
 POST_ARGS_TEMPL = {
     'lastPageSize': 10,
@@ -150,6 +162,26 @@ def match_search(item, org, summary):
     return includes(item['org'], org) and includes(item['summary'], summary)
 
 
+def make_path(base_path, ts, title, summary, **_):
+    """Make a meaningful path/file name based on passed parameters."""
+    date = dateparser.parse(ts).strftime('%Y-%m-%d')
+    path = Path(base_path) / date
+    path.mkdir(parents=True, exist_ok=True)
+    slug = '-'.join(slugify(title).split('-', 4)[:-1])
+    hash = make_hash(summary)[:6]
+    fname = '{}-{}.txt'.format(slug, hash)
+    return path / fname
+
+
+def save_article(path, ts, summary, **context):
+    """Save the passed article to a disk file."""
+    text = '\n'.join(l for l in summary.splitlines() if l)
+    timestamp = dateparser.parse(ts).strftime('%Y/%d/%m %T:%M')
+    with open(path, 'w', encoding='utf8') as f:
+        f.write(REPORT_TEMPL.format(ts=timestamp, summary=text, **context))
+    print('Saved "{}".'.format(path))    
+
+
 @click.group()
 def cli():
     """CLI command group."""
@@ -182,7 +214,8 @@ def save_report(org, summary):
     matching = partial(match_search, org=org, summary=summary)
     with SqliteDict('.cache') as cache:
         for item in filter(matching, cache.values()):
-            print(item)
+            path = make_path(base_path=REPORT_PATH, **item)
+            save_article(**item, path=path)
 
 
 if __name__ == '__main__':
