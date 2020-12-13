@@ -4,8 +4,10 @@ import json
 from itertools import count
 from hashlib import sha1
 from pathlib import Path
-import time
-
+"""
+    A simple CLI tool to scrap and filter stuff
+    from e-disclosure.ru website.
+"""
 import click
 from bs4 import BeautifulSoup
 import dateparser
@@ -20,7 +22,8 @@ HOME_URL = 'https://e-disclosure.ru/'
 SEARCH_URL = 'https://e-disclosure.ru/poisk-po-soobshheniyam'
 REPORT_PATH = Path(__file__).parent / 'reports'
 REPORT_TEMPL = '''
-[{ts}] "{org}"
+[{ts}]
+"{org}"
 ---
 {title}
 ---
@@ -29,31 +32,26 @@ REPORT_TEMPL = '''
 '''
 
 POST_ARGS_TEMPL = {
-    'lastPageSize': 10,
-    'query': '',
-    'queryEvent': '',
-    'eventTypeTerm': '',
-    'radView': '0',
-    'eventTypeCheckboxGroup': [
-        97, 81, 100, 101, 102, 103, 105, 106, 107, 150, 205, 206, 232,
-    ],
-    'textfieldEvent': '',
-    'radReg': 'FederalDistricts',
-    'districtsCheckboxGroup': -1,
-    'regionsCheckboxGroup': -1,
-    'branchesCheckboxGroup': -1,
-    'textfieldCompany': '',
+	'lastPageSize': '2147483647',
+	'lastPageNumber': '1',
+	'query': '',
+	'queryEvent': '',
+	'eventTypeTerm': '',
+	'radView': '0',
+	'textfieldEvent': '',
+	'radReg': 'FederalDistricts',
+	'districtsCheckboxGroup': '-1',
+	'regionsCheckboxGroup': '-1',
+	'branchesCheckboxGroup': '-1',
+	'textfieldCompany': ''
 }
 
-def make_payload(page, days):
+
+def make_payload(days):
     """Format the POST request payload."""
-    today = dateparser.parse('today')
-    start_date = dateparser.parse('{} days ago'.format(days))
-    extra = {
-        'lastPageNumber': page,
-        'dateStart': start_date.strftime('%d.%m.%Y'),
-        'dateFinish': today.strftime('%d.%m.%Y'),
-    }
+    today = dateparser.parse('today').strftime('%d.%m.%Y')
+    days_ago = dateparser.parse('{} days ago'.format(days)).strftime('%d.%m.%Y')
+    extra = {'dateStart': days_ago, 'dateFinish': today}
     return {**POST_ARGS_TEMPL, **extra}
 
 
@@ -103,47 +101,40 @@ def parse_page(html):
             'title': title,
         }
 
-def deduplicate(items):
-    """Remove duplicated items."""
-    return dict(zip(map(make_hash, items), items)).values()
 
-
-def add_summary(items):
-    """Fetch the item's summary page HTML."""
-    for item in items:
-        print('Fetching page "{url}"...'.format(**item))
-        resp = requests.get(item['url'])
-        assert resp.status_code == 200
-        soup = BeautifulSoup(resp.content, 'html.parser')
-        summary = soup.find('div', {'id': 'cont_wrap'}).text
-        yield {**item, 'summary': summary}
+def fetch_summary_page(url):
+    """Fetch the summary page HTML."""
+    print('Fetching page "{}"...'.format(url))
+    resp = requests.get(url)
+    assert resp.status_code == 200
+    soup = BeautifulSoup(resp.content, 'html.parser')
+    return soup.find('div', {'id': 'cont_wrap'}).text
 
 
 def scrap_site(days):
     """Load paginated results, extract relevant information."""
     with DisclosureClient() as client:
-        for page in count(start=1):
-            resp = client.post(data=make_payload(page, days))
-            assert resp.status_code == 200
-            items = list(add_summary(deduplicate(parse_page(resp.text))))
-            if not items:
-                break
-            yield from items
-            time.sleep(1)
+        resp = client.post(data=make_payload(days))
+        assert resp.status_code == 200
+        yield from parse_page(resp.text)
+
 
 def make_hash(obj):
     """Make an object hash."""
-    return sha1(json.dumps(obj, sort_keys=True).encode()).hexdigest()
+    return sha1(json.dumps(obj, sort_keys=True).encode()).hexdigest()[:4]
 
-def cache_object(obj):
-    """Cache the object persistently, return True if already cached."""
-    key = make_hash(obj)
+
+def cache_object(key, value):
+    """Cache the object persistently."""
     with SqliteDict('.cache') as cache:
-        if key in cache:
-            return True
-        cache[key] = obj
+        cache[key] = value
         cache.commit()
-    return False
+
+
+def key_cached(key):
+    """Check if the key already exists in the cache."""
+    with SqliteDict('.cache') as cache:
+        return key in cache
 
 
 def includes(text, terms):
@@ -187,15 +178,21 @@ def cli():
 
 
 @cli.command(name='fetch')
-@click.option('-d', '--days', type=int, default=1,
+@click.option('-d', '--days', type=int, default=30,
               help='Fetch event posted in the last N days')
 def fetch_new_events(days):
-    """Fetch and cache events posted during the last N days."""
-    n = 0
-    for n, item in enumerate(scrap_site(days)):
-        if cache_object(item):
-            break
-    print('Cached {} new records.'.format(n))
+    """Fetch and cache the recently posted events."""
+    counter = count(start=1)
+    for item in scrap_site(days):
+        key = make_hash(item['url'])
+        if not key_cached(key):
+            with_summary = {
+                **item,
+                'summary': fetch_summary_page(item['url']),
+            }
+            cache_object(key, with_summary)
+            next(counter)
+    print('Cached {} new records.'.format(next(counter)))
 
 
 @cli.command(name='report')
