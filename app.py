@@ -88,21 +88,24 @@ def DisclosureClient():
 def parse_page(html):
     """Parse HTML page code, scrape the relevant stuff."""
     soup = BeautifulSoup(html, 'html.parser')
-    rows = soup.findAll('tr')
-    if not rows:
-        return
-    for row in rows:
-        cols = row.findAll('td')
-        ts = cols[0].text
+    rows = (
+        row.findAll('td')
+        for row in soup.findAll('tr')
+        if len(row.findAll('td')) == 2
+    )
+    for cols in rows:
         anchors = cols[1].findAll('a')
-        org, title = anchors[0].text, anchors[1].text
-        url = anchors[1].attrs['href']
-        yield {
-            'ts': ts,
-            'url': url,
-            'org': org,
-            'title': title,
-        }
+        if anchors:
+            ts = cols[0].text
+            if anchors:
+                org, title = anchors[0].text, anchors[1].text
+                url = anchors[1].attrs['href']
+                yield {
+                    'ts': ts,
+                    'url': url,
+                    'org': org,
+                    'title': title,
+                }
 
 
 def fetch_summary_page(url):
