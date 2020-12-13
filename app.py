@@ -1,13 +1,13 @@
+"""
+    A simple CLI tool to scrap and filter stuff
+    from e-disclosure.ru website.
+"""
 from contextlib import contextmanager
 from functools import partial
 import json
 from itertools import count
 from hashlib import sha1
 from pathlib import Path
-"""
-    A simple CLI tool to scrap and filter stuff
-    from e-disclosure.ru website.
-"""
 import click
 from bs4 import BeautifulSoup
 import dateparser
@@ -38,12 +38,15 @@ POST_ARGS_TEMPL = {
 	'queryEvent': '',
 	'eventTypeTerm': '',
 	'radView': '0',
+    'eventTypeCheckboxGroup': [
+        97, 81, 100, 101, 102, 103, 105, 106, 107, 150, 205, 206, 232,
+    ],
 	'textfieldEvent': '',
 	'radReg': 'FederalDistricts',
 	'districtsCheckboxGroup': '-1',
 	'regionsCheckboxGroup': '-1',
 	'branchesCheckboxGroup': '-1',
-	'textfieldCompany': ''
+	'textfieldCompany': '',
 }
 
 
