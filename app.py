@@ -160,7 +160,7 @@ def make_path(base_path, ts, title, summary, **_):
     path = Path(base_path) / date
     path.mkdir(parents=True, exist_ok=True)
     slug = '-'.join(slugify(title).split('-', 4)[:-1])
-    hash = make_hash(summary)[:6]
+    hash = make_hash(summary)
     fname = '{}-{}.txt'.format(slug, hash)
     return path / fname
 
