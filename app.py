@@ -185,7 +185,7 @@ def cli():
               help='Fetch event posted in the last N days')
 def fetch_new_events(days):
     """Fetch and cache the recently posted events."""
-    counter = count(start=1)
+    counter = count()
     for item in scrap_site(days):
         key = make_hash(item['url'])
         if not key_cached(key):
