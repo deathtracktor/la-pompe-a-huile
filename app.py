@@ -184,7 +184,7 @@ def cli():
 
 
 @cli.command(name='fetch')
-@click.option('-d', '--days', type=int, default=30,
+@click.option('-d', '--days', type=int, default=1,
               help='Fetch event posted in the last N days')
 def fetch_new_events(days):
     """Fetch and cache the recently posted events."""
