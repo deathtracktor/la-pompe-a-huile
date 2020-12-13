@@ -88,7 +88,7 @@ def DisclosureClient():
 def parse_page(html):
     """Parse HTML page code, scrape the relevant stuff."""
     soup = BeautifulSoup(html, 'html.parser')
-    rows = soup.find('table').findAll('tr')
+    rows = soup.findAll('tr')
     if not rows:
         return
     for row in rows:
